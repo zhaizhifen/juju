@@ -20,6 +20,9 @@ type SpaceName string
 
 // SpaceInfo defines a network space.
 type SpaceInfo struct {
+	// ID is the unique identifier for the space.
+	ID string
+
 	// Name is the name of the space.
 	// It is used by operators for identifying a space and should be unique.
 	Name SpaceName
@@ -53,4 +56,15 @@ func (s SpaceInfos) HasSpaceWithName(name SpaceName) bool {
 		}
 	}
 	return false
+}
+
+// Space returns a reference to the space with the input ID if it exists in the
+// collection. Otherwise nil is returned.
+func (s SpaceInfos) Space(id string) *SpaceInfo {
+	for _, space := range s {
+		if space.ID == id {
+			return &space
+		}
+	}
+	return nil
 }
