@@ -377,6 +377,25 @@ func (pas ProviderAddresses) ToSpaceAddresses(lookup SpaceLookup) (SpaceAddresse
 	return sas, nil
 }
 
+// BestControllerAddress returns the most suitable address to use as a Juju
+// Controller (API/state server) endpoint.
+// The second return value is false when no address can be returned.
+// When machineLocal is true both ScopeCloudLocal and ScopeMachineLocal
+// addresses are considered during the selection,
+// otherwise just ScopeCloudLocal are.
+// This method is used on ProviderAddresses, because it is used to select an
+// address from those returned by `instance.Addresses` before Mongo is started.
+// The logic is the same as for SpaceAddress.SelectInternalAddress.
+func (pas ProviderAddresses) BestControllerAddress(machineLocal bool) (ProviderAddress, bool) {
+	index := bestAddressIndex(len(pas), func(i int) Address { return pas[i] }, internalAddressMatcher(machineLocal))
+	if index < 0 {
+		return ProviderAddress{}, false
+	}
+	addr := pas[index]
+	logger.Debugf("selected %q as controller address, using scope %q", addr.Value, addr.Scope)
+	return addr, true
+}
+
 // SpaceAddress represents the location of a machine, including metadata
 // about what kind of location the address describes.
 // This is a server-side type that may include a space reference.
@@ -486,6 +505,19 @@ func (sas SpaceAddresses) InSpaces(spaces ...SpaceInfo) (SpaceAddresses, bool) {
 	return sas, false
 }
 
+// SelectInternalAddress picks one address that can be used as an endpoint for
+// juju internal communication.
+// If there are no suitable addresses, then ok is false (and an empty address
+// is returned).
+// If a suitable address was found then ok is true.
+func (sas SpaceAddresses) SelectInternalAddress(machineLocal bool) (SpaceAddress, bool) {
+	index := bestAddressIndex(len(sas), func(i int) Address { return sas[i] }, internalAddressMatcher(machineLocal))
+	if index < 0 {
+		return SpaceAddress{}, false
+	}
+	return sas[index], true
+}
+
 // DeriveAddressType attempts to detect the type of address given.
 func DeriveAddressType(value string) AddressType {
 	ip := net.ParseIP(value)
@@ -502,21 +534,6 @@ func DeriveAddressType(value string) AddressType {
 	}
 }
 
-// SelectControllerAddress returns the most suitable address to use as a Juju
-// Controller (API/state server) endpoint given the list of addresses.
-// The second return value is false when no address can be returned.
-// When machineLocal is true both ScopeCloudLocal and ScopeMachineLocal
-// addresses are considered during the selection,
-// otherwise just ScopeCloudLocal are.
-func SelectControllerAddress(addresses []SpaceAddress, machineLocal bool) (SpaceAddress, bool) {
-	internalAddress, ok := SelectInternalAddress(addresses, machineLocal)
-	logger.Debugf(
-		"selected %q as controller address, using scope %q",
-		internalAddress.Value, internalAddress.Scope,
-	)
-	return internalAddress, ok
-}
-
 // SelectPublicAddress picks one address from a slice that would be
 // appropriate to display as a publicly accessible endpoint.
 // If there are no suitable addresses, then ok is false
@@ -526,20 +543,6 @@ func SelectPublicAddress(addresses []SpaceAddress) (SpaceAddress, bool) {
 	index := bestAddressIndex(len(addresses), func(i int) Address {
 		return addresses[i]
 	}, publicMatch)
-	if index < 0 {
-		return SpaceAddress{}, false
-	}
-	return addresses[index], true
-}
-
-// SelectInternalAddress picks one address from a slice that can be
-// used as an endpoint for juju internal communication. If there are
-// no suitable addresses, then ok is false (and an empty address is
-// returned). If a suitable address was found then ok is true.
-func SelectInternalAddress(addresses []SpaceAddress, machineLocal bool) (SpaceAddress, bool) {
-	index := bestAddressIndex(len(addresses), func(i int) Address {
-		return addresses[i]
-	}, internalAddressMatcher(machineLocal))
 	if index < 0 {
 		return SpaceAddress{}, false
 	}

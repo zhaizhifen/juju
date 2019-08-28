@@ -260,7 +260,7 @@ func (s *AddressSuite) TestNewScopedAddressHostname(c *gc.C) {
 
 type selectTest struct {
 	about         string
-	addresses     []network.SpaceAddress
+	addresses     network.SpaceAddresses
 	expectedIndex int
 }
 
@@ -460,7 +460,7 @@ func (s *AddressSuite) TestSelectInternalAddress(c *gc.C) {
 	for i, t := range selectInternalTests {
 		c.Logf("test %d: %s", i, t.about)
 		expectAddr, expectOK := t.expected()
-		actualAddr, actualOK := network.SelectInternalAddress(t.addresses, false)
+		actualAddr, actualOK := t.addresses.SelectInternalAddress(false)
 		c.Check(actualOK, gc.Equals, expectOK)
 		c.Check(actualAddr, gc.Equals, expectAddr)
 	}
@@ -547,7 +547,7 @@ func (s *AddressSuite) TestSelectInternalMachineAddress(c *gc.C) {
 	for i, t := range selectInternalMachineTests {
 		c.Logf("test %d: %s", i, t.about)
 		expectAddr, expectOK := t.expected()
-		actualAddr, actualOK := network.SelectInternalAddress(t.addresses, true)
+		actualAddr, actualOK := t.addresses.SelectInternalAddress(true)
 		c.Check(actualOK, gc.Equals, expectOK)
 		c.Check(actualAddr, gc.Equals, expectAddr)
 	}
