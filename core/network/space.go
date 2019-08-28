@@ -15,6 +15,13 @@ const (
 	DefaultSpaceName = ""
 )
 
+// SpaceLookup describes methods for acquiring lookups that
+// will translate space IDs to space names and vice versa.
+type SpaceLookup interface {
+	SpaceIDsByName() (map[string]string, error)
+	SpaceInfosByID() (map[string]SpaceInfo, error)
+}
+
 // SpaceName is the name of a network space.
 type SpaceName string
 

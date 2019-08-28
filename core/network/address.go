@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/juju/collections/set"
+	"github.com/juju/errors"
 )
 
 // macAddressTemplate is suitable for generating virtual MAC addresses,
@@ -75,9 +76,16 @@ const (
 	ScopeLinkLocal    Scope = "link-local"
 )
 
+// Address describes methods for returning details
+// about an IP address or host name.
 type Address interface {
+	// Host returns the value for the host-name/IP address.
 	Host() string
+
+	// AddressType returns the type of the address.
 	AddressType() AddressType
+
+	// AddressScope returns the scope of the address.
 	AddressScope() Scope
 }
 
@@ -299,16 +307,6 @@ func (a ProviderAddress) String() string {
 	return buf.String()
 }
 
-// NewProviderAddresses is a convenience function to create addresses
-// from a variable number of string arguments.
-func NewProviderAddresses(inAddresses ...string) (outAddresses []ProviderAddress) {
-	outAddresses = make([]ProviderAddress, len(inAddresses))
-	for i, address := range inAddresses {
-		outAddresses[i] = NewProviderAddress(address)
-	}
-	return outAddresses
-}
-
 // NewProviderAddress creates a new ProviderAddress, deriving its type from the
 // value and using ScopeUnknown as scope. It is a shortcut to calling
 // NewScopedProvider(value, ScopeUnknown).
@@ -323,16 +321,6 @@ func NewScopedProviderAddress(value string, scope Scope) ProviderAddress {
 	return ProviderAddress{MachineAddress: NewScopedMachineAddress(value, scope)}
 }
 
-// NewProviderAddressesInSpace is a convenience function to create addresses
-// in the same space, from a a variable number of string arguments.
-func NewProviderAddressesInSpace(spaceName string, inAddresses ...string) (outAddresses []ProviderAddress) {
-	outAddresses = make([]ProviderAddress, len(inAddresses))
-	for i, address := range inAddresses {
-		outAddresses[i] = NewProviderAddressInSpace(spaceName, address)
-	}
-	return outAddresses
-}
-
 // NewProviderAddressInSpace creates a new ProviderAddress,
 // deriving its type and scope from the value,
 // and associating it with the given space name.
@@ -341,6 +329,52 @@ func NewProviderAddressInSpace(spaceName string, value string) ProviderAddress {
 		MachineAddress: NewMachineAddress(value),
 		SpaceName:      SpaceName(spaceName),
 	}
+}
+
+// ProviderAddresses is a slice of ProviderAddress
+// supporting conversion to SpaceAddresses.
+type ProviderAddresses []ProviderAddress
+
+// NewProviderAddresses is a convenience function to create addresses
+// from a variable number of string arguments.
+func NewProviderAddresses(inAddresses ...string) (outAddresses ProviderAddresses) {
+	outAddresses = make(ProviderAddresses, len(inAddresses))
+	for i, address := range inAddresses {
+		outAddresses[i] = NewProviderAddress(address)
+	}
+	return outAddresses
+}
+
+// NewProviderAddressesInSpace is a convenience function to create addresses
+// in the same space, from a a variable number of string arguments.
+func NewProviderAddressesInSpace(spaceName string, inAddresses ...string) (outAddresses ProviderAddresses) {
+	outAddresses = make(ProviderAddresses, len(inAddresses))
+	for i, address := range inAddresses {
+		outAddresses[i] = NewProviderAddressInSpace(spaceName, address)
+	}
+	return outAddresses
+}
+
+// ToSpaceAddresses transforms the ProviderAddresses to SpaceAddresses by using
+// the input lookup for conversion of space name to space ID.
+func (pas ProviderAddresses) ToSpaceAddresses(lookup SpaceLookup) (SpaceAddresses, error) {
+	idFor, err := lookup.SpaceIDsByName()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	sas := make(SpaceAddresses, len(pas))
+	for i, pa := range pas {
+		sas[i] = SpaceAddress{MachineAddress: pa.MachineAddress}
+		if pa.SpaceName != "" {
+			id, ok := idFor[string(pa.SpaceName)]
+			if !ok {
+				return nil, errors.NotFoundf("space with name %q", pa.SpaceName)
+			}
+			sas[i].SpaceID = id
+		}
+	}
+	return sas, nil
 }
 
 // SpaceAddress represents the location of a machine, including metadata
@@ -391,14 +425,41 @@ func NewScopedSpaceAddress(value string, scope Scope) SpaceAddress {
 	return SpaceAddress{MachineAddress: NewScopedMachineAddress(value, scope)}
 }
 
+// SpaceAddresses is a slice of SpaceAddress
+// supporting conversion to ProviderAddresses.
+type SpaceAddresses []SpaceAddress
+
 // NewSpaceAddresses is a convenience function to create addresses
 // from a variable number of string arguments.
-func NewSpaceAddresses(inAddresses ...string) (outAddresses []SpaceAddress) {
-	outAddresses = make([]SpaceAddress, len(inAddresses))
+func NewSpaceAddresses(inAddresses ...string) (outAddresses SpaceAddresses) {
+	outAddresses = make(SpaceAddresses, len(inAddresses))
 	for i, address := range inAddresses {
 		outAddresses[i] = NewSpaceAddress(address)
 	}
 	return outAddresses
+}
+
+// ToProviderAddresses transforms the SpaceAddresses to ProviderAddresses by using
+// the input lookup for conversion of space ID to space info.
+func (sas SpaceAddresses) ToProviderAddresses(lookup SpaceLookup) (ProviderAddresses, error) {
+	infoFor, err := lookup.SpaceInfosByID()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	pas := make(ProviderAddresses, len(sas))
+	for i, sa := range sas {
+		pas[i] = ProviderAddress{MachineAddress: sa.MachineAddress}
+		if sa.SpaceID != "" {
+			info, ok := infoFor[sa.SpaceID]
+			if !ok {
+				return nil, errors.NotFoundf("space with ID %q", sa.SpaceID)
+			}
+			pas[i].SpaceName = info.Name
+			pas[i].ProviderSpaceID = info.ProviderId
+		}
+	}
+	return pas, nil
 }
 
 // DeriveAddressType attempts to detect the type of address given.

@@ -6,6 +6,8 @@ package network_test
 import (
 	"fmt"
 
+	"github.com/juju/errors"
+
 	jc "github.com/juju/testing/checkers"
 	gc "gopkg.in/check.v1"
 
@@ -141,7 +143,7 @@ func (s *AddressSuite) TestNewProviderAddressInSpace(c *gc.C) {
 
 func (s *AddressSuite) TestNewProviderAddressesInSpace(c *gc.C) {
 	addrs := network.NewProviderAddressesInSpace("bar", "0.2.3.4", "fc00::1")
-	c.Check(addrs, jc.DeepEquals, []network.ProviderAddress{{
+	c.Check(addrs, jc.DeepEquals, network.ProviderAddresses{{
 		MachineAddress: network.MachineAddress{
 			Value: "0.2.3.4",
 			Type:  "ipv4",
@@ -785,4 +787,69 @@ func (s *AddressSuite) TestSelectAddressesBySpaceNoneFound(c *gc.C) {
 	filtered, ok := network.SelectAddressesBySpaces(addrs, sp)
 	c.Check(ok, jc.IsFalse)
 	c.Check(filtered, jc.DeepEquals, addrs)
+}
+
+type stubLookup struct{}
+
+var _ network.SpaceLookup = stubLookup{}
+
+func (s stubLookup) SpaceIDsByName() (map[string]string, error) {
+	return map[string]string{
+		"space-one": "1",
+		"space-two": "2",
+	}, nil
+}
+
+func (s stubLookup) SpaceInfosByID() (map[string]network.SpaceInfo, error) {
+	return map[string]network.SpaceInfo{
+		"1": {ID: "1", Name: "space-one", ProviderId: "p1"},
+		"2": {ID: "2", Name: "space-two"},
+	}, nil
+}
+
+func (s *AddressSuite) TestProviderAddressesToSpaceAddresses(c *gc.C) {
+	// Check success.
+	addrs := network.ProviderAddresses{
+		network.NewProviderAddressInSpace("space-one", "1.2.3.4"),
+		network.NewProviderAddressInSpace("space-two", "2.3.4.5"),
+		network.NewProviderAddress("3.4.5.6"),
+	}
+
+	exp := network.NewSpaceAddresses("1.2.3.4", "2.3.4.5", "3.4.5.6")
+	exp[0].SpaceID = "1"
+	exp[1].SpaceID = "2"
+
+	res, err := addrs.ToSpaceAddresses(stubLookup{})
+	c.Assert(err, jc.ErrorIsNil)
+	c.Check(res, jc.SameContents, exp)
+
+	// Add an address in a space that the lookup will not resolve.
+	addrs = append(addrs, network.NewProviderAddressInSpace("space-denied", "4.5.6.7"))
+	_, err = addrs.ToSpaceAddresses(stubLookup{})
+	c.Assert(err, jc.Satisfies, errors.IsNotFound)
+}
+
+func (s *AddressSuite) TestSpaceAddressesToProviderAddresses(c *gc.C) {
+	// Check success.
+	addrs := network.NewSpaceAddresses("1.2.3.4", "2.3.4.5", "3.4.5.6")
+	addrs[0].SpaceID = "1"
+	addrs[1].SpaceID = "2"
+
+	exp := network.ProviderAddresses{
+		network.NewProviderAddressInSpace("space-one", "1.2.3.4"),
+		network.NewProviderAddressInSpace("space-two", "2.3.4.5"),
+		network.NewProviderAddress("3.4.5.6"),
+	}
+	// Only the first address in the lookup has a provider ID.
+	exp[0].ProviderSpaceID = "p1"
+
+	res, err := addrs.ToProviderAddresses(stubLookup{})
+	c.Assert(err, jc.ErrorIsNil)
+	c.Check(res, jc.SameContents, exp)
+
+	// Add an address in a space that the lookup will not resolve.
+	addrs = append(addrs, network.NewSpaceAddress("4.5.6.7"))
+	addrs[3].SpaceID = "3"
+	_, err = addrs.ToProviderAddresses(stubLookup{})
+	c.Assert(err, jc.Satisfies, errors.IsNotFound)
 }
