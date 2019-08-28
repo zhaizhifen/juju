@@ -759,18 +759,22 @@ func (s *AddressSuite) TestSelectAddressesBySpaceNamesFiltered(c *gc.C) {
 		Subnets:    nil,
 	}
 
-	addrsSpace := []network.SpaceAddress{network.NewSpaceAddress("192.168.5.5")}
-	addrsSpace[0].SpaceID = sp.ID
-	addrsNoSpace := []network.SpaceAddress{network.NewSpaceAddress("127.0.0.1")}
+	// Only the first address has a space.
+	addr := network.NewSpaceAddress("192.168.5.5")
+	addr.SpaceID = sp.ID
+	addrs := network.SpaceAddresses{
+		addr,
+		network.NewSpaceAddress("127.0.0.1"),
+	}
 
-	filtered, ok := network.SelectAddressesBySpaces(append(addrsSpace, addrsNoSpace...), sp)
+	filtered, ok := addrs.InSpaces(sp)
 	c.Check(ok, jc.IsTrue)
-	c.Check(filtered, jc.DeepEquals, addrsSpace)
+	c.Check(filtered, jc.DeepEquals, network.SpaceAddresses{addr})
 }
 
 func (s *AddressSuite) TestSelectAddressesBySpaceNoSpaceFalse(c *gc.C) {
-	addrs := []network.SpaceAddress{network.NewSpaceAddress("127.0.0.1")}
-	filtered, ok := network.SelectAddressesBySpaces(addrs)
+	addrs := network.SpaceAddresses{network.NewSpaceAddress("127.0.0.1")}
+	filtered, ok := addrs.InSpaces()
 	c.Check(ok, jc.IsFalse)
 	c.Check(filtered, jc.DeepEquals, addrs)
 }
@@ -783,8 +787,8 @@ func (s *AddressSuite) TestSelectAddressesBySpaceNoneFound(c *gc.C) {
 		Subnets:    nil,
 	}
 
-	addrs := []network.SpaceAddress{network.NewSpaceAddress("127.0.0.1")}
-	filtered, ok := network.SelectAddressesBySpaces(addrs, sp)
+	addrs := network.SpaceAddresses{network.NewSpaceAddress("127.0.0.1")}
+	filtered, ok := addrs.InSpaces(sp)
 	c.Check(ok, jc.IsFalse)
 	c.Check(filtered, jc.DeepEquals, addrs)
 }

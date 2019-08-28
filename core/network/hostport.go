@@ -40,6 +40,8 @@ func (hps HostPorts) FilterUnusable() HostPorts {
 	return filtered
 }
 
+// Strings returns the HostPorts as a slice of
+// strings suitable for passing to net.Dial.
 func (hps HostPorts) Strings() []string {
 	result := make([]string, len(hps))
 	for i, addr := range hps {
@@ -81,13 +83,17 @@ func (hps HostPorts) PrioritizeInternal(machineLocal bool) []string {
 	return out
 }
 
+// DialAddress returns a string value for the input HostPort,
+// suitable for passing as an argument to net.Dial.
 func DialAddress(a HostPort) string {
 	return net.JoinHostPort(a.Host(), strconv.Itoa(a.Port()))
 }
 
+// NetPort represents a network port.
 // TODO (manadart 2019-08-15): Finish deprecation of `Port` and use that name.
 type NetPort int
 
+// Port returns the port number.
 func (p NetPort) Port() int {
 	return int(p)
 }
@@ -110,8 +116,11 @@ func (hp MachineHostPort) GoString() string {
 	return hp.String()
 }
 
+// MachineHostPorts is a slice of MachineHostPort
+// allowing use as a receiver for bulk operations.
 type MachineHostPorts []MachineHostPort
 
+// HostPorts returns the slice as a new slice of the HostPort indirection.
 func (hp MachineHostPorts) HostPorts() HostPorts {
 	addrs := make(HostPorts, len(hp))
 	for i, hp := range hp {
@@ -180,6 +189,8 @@ func (hp ProviderHostPort) GoString() string {
 	return hp.String()
 }
 
+// ProviderHostPorts is a slice of ProviderHostPort
+// allowing use as a receiver for bulk operations.
 type ProviderHostPorts []ProviderHostPort
 
 func (hp ProviderHostPorts) Addresses() []ProviderAddress {
@@ -190,6 +201,7 @@ func (hp ProviderHostPorts) Addresses() []ProviderAddress {
 	return addrs
 }
 
+// HostPorts returns the slice as a new slice of the HostPort indirection.
 func (hp ProviderHostPorts) HostPorts() HostPorts {
 	addrs := make(HostPorts, len(hp))
 	for i, hp := range hp {
@@ -216,7 +228,7 @@ func ParseProviderHostPorts(hostPorts ...string) (ProviderHostPorts, error) {
 	return hps, nil
 }
 
-// SpaceHostPort associates an address with a port.
+// SpaceHostPort associates a space ID decorated address with a port.
 type SpaceHostPort struct {
 	SpaceAddress
 	NetPort
@@ -234,8 +246,38 @@ func (hp SpaceHostPort) GoString() string {
 	return hp.String()
 }
 
+// Less reports whether hp is ordered before hp2
+// according to the criteria used by SortHostPorts.
+func (hp SpaceHostPort) Less(hp2 SpaceHostPort) bool {
+	order1 := hp.sortOrder()
+	order2 := hp2.sortOrder()
+	if order1 == order2 {
+		if hp.SpaceAddress.Value == hp2.SpaceAddress.Value {
+			return hp.Port() < hp2.Port()
+		}
+		return hp.SpaceAddress.Value < hp2.SpaceAddress.Value
+	}
+	return order1 < order2
+}
+
+// SpaceHostPorts is a slice of SpaceHostPort
+// allowing use as a receiver for bulk operations.
 type SpaceHostPorts []SpaceHostPort
 
+// NewSpaceHostPorts creates a list of SpaceHostPorts
+// from each input string address and port.
+func NewSpaceHostPorts(port int, addresses ...string) SpaceHostPorts {
+	hps := make([]SpaceHostPort, len(addresses))
+	for i, addr := range addresses {
+		hps[i] = SpaceHostPort{
+			SpaceAddress: NewSpaceAddress(addr),
+			NetPort:      NetPort(port),
+		}
+	}
+	return hps
+}
+
+// HostPorts returns the slice as a new slice of the HostPort indirection.
 func (hps SpaceHostPorts) HostPorts() HostPorts {
 	addrs := make(HostPorts, len(hps))
 	for i, hp := range hps {
@@ -283,18 +325,27 @@ func (hps SpaceHostPorts) SelectInternal(machineLocal bool) []string {
 	return out
 }
 
-// Less reports whether hp is ordered before hp2
-// according to the criteria used by SortHostPorts.
-func (hp SpaceHostPort) Less(hp2 SpaceHostPort) bool {
-	order1 := hp.sortOrder()
-	order2 := hp2.sortOrder()
-	if order1 == order2 {
-		if hp.SpaceAddress.Value == hp2.SpaceAddress.Value {
-			return hp.Port() < hp2.Port()
-		}
-		return hp.SpaceAddress.Value < hp2.SpaceAddress.Value
+// ToProviderAddresses transforms the SpaceAddresses to ProviderAddresses by using
+// the input lookup for conversion of space ID to space info.
+func (hps SpaceHostPorts) ToProviderHostPorts(lookup SpaceLookup) (ProviderHostPorts, error) {
+	infoFor, err := lookup.SpaceInfosByID()
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	return order1 < order2
+
+	pHPs := make(ProviderHostPorts, len(hps))
+	for i, hp := range hps {
+		pHPs[i] = ProviderHostPort{ProviderAddress: ProviderAddress{MachineAddress: hp.MachineAddress}}
+		if hp.SpaceID != "" {
+			info, ok := infoFor[hp.SpaceID]
+			if !ok {
+				return nil, errors.NotFoundf("space with ID %q", hp.SpaceID)
+			}
+			pHPs[i].SpaceName = info.Name
+			pHPs[i].ProviderSpaceID = info.ProviderId
+		}
+	}
+	return pHPs, nil
 }
 
 // SpaceAddressesWithPort returns the input SpaceAddresses
@@ -304,19 +355,6 @@ func SpaceAddressesWithPort(addrs []SpaceAddress, port int) SpaceHostPorts {
 	for i, addr := range addrs {
 		hps[i] = SpaceHostPort{
 			SpaceAddress: addr,
-			NetPort:      NetPort(port),
-		}
-	}
-	return hps
-}
-
-// NewSpaceHostPorts creates a list of SpaceHostPorts
-// from each input string address and port.
-func NewSpaceHostPorts(port int, addresses ...string) SpaceHostPorts {
-	hps := make([]SpaceHostPort, len(addresses))
-	for i, addr := range addresses {
-		hps[i] = SpaceHostPort{
-			SpaceAddress: NewSpaceAddress(addr),
 			NetPort:      NetPort(port),
 		}
 	}
@@ -343,8 +381,7 @@ func APIHostPortsToNoProxyString(ahp []SpaceHostPorts) string {
 	noProxySet := set.NewStrings()
 	for _, host := range ahp {
 		for _, hp := range host {
-			if hp.SpaceAddress.Scope == ScopeMachineLocal ||
-				hp.SpaceAddress.Scope == ScopeLinkLocal {
+			if hp.SpaceAddress.Scope == ScopeMachineLocal || hp.SpaceAddress.Scope == ScopeLinkLocal {
 				continue
 			}
 			noProxySet.Add(hp.SpaceAddress.Value)

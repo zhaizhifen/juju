@@ -462,6 +462,30 @@ func (sas SpaceAddresses) ToProviderAddresses(lookup SpaceLookup) (ProviderAddre
 	return pas, nil
 }
 
+// InSpaces returns the SpaceAddresses that are in the input spaces.
+func (sas SpaceAddresses) InSpaces(spaces ...SpaceInfo) (SpaceAddresses, bool) {
+	if len(spaces) == 0 {
+		logger.Errorf("addresses not filtered - no spaces given.")
+		return sas, false
+	}
+
+	spaceInfos := SpaceInfos(spaces)
+	var selectedAddresses SpaceAddresses
+	for _, addr := range sas {
+		if space := spaceInfos.Space(addr.SpaceID); space != nil {
+			logger.Debugf("selected %q as an address in space %q", addr.Value, space.Name)
+			selectedAddresses = append(selectedAddresses, addr)
+		}
+	}
+
+	if len(selectedAddresses) > 0 {
+		return selectedAddresses, true
+	}
+
+	logger.Errorf("no addresses found in spaces %s", spaceInfos)
+	return sas, false
+}
+
 // DeriveAddressType attempts to detect the type of address given.
 func DeriveAddressType(value string) AddressType {
 	ip := net.ParseIP(value)
@@ -476,32 +500,6 @@ func DeriveAddressType(value string) AddressType {
 	default:
 		panic("Unknown form of IP address")
 	}
-}
-
-// SelectAddressesBySpaces filters the input slice of
-// Addresses down to those in the input spaces.
-func SelectAddressesBySpaces(addresses []SpaceAddress, spaces ...SpaceInfo) ([]SpaceAddress, bool) {
-	if len(spaces) == 0 {
-		logger.Errorf("addresses not filtered - no spaces given.")
-		return addresses, false
-	}
-
-	spaceInfos := SpaceInfos(spaces)
-
-	var selectedAddresses []SpaceAddress
-	for _, addr := range addresses {
-		if space := spaceInfos.Space(addr.SpaceID); space != nil {
-			logger.Debugf("selected %q as an address in space %q", addr.Value, space.Name)
-			selectedAddresses = append(selectedAddresses, addr)
-		}
-	}
-
-	if len(selectedAddresses) > 0 {
-		return selectedAddresses, true
-	}
-
-	logger.Errorf("no addresses found in spaces %s", spaceInfos)
-	return addresses, false
 }
 
 // SelectControllerAddress returns the most suitable address to use as a Juju
