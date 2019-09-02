@@ -110,12 +110,6 @@ type MachineAddress struct {
 	Scope Scope
 }
 
-// Address returns the receiver as the Address indirection.
-// This allows us to extract a common type from nested embeddings.
-func (a MachineAddress) Address() Address {
-	return a
-}
-
 // Host returns the value for the host-name/IP address.
 func (a MachineAddress) Host() string {
 	return a.Value

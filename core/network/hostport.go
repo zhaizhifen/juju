@@ -19,7 +19,6 @@ type HostPort interface {
 	Host() string
 	Port() int
 	AddressScope() Scope
-	Address() Address
 }
 
 // HostPorts derives from a slice of HostPort
@@ -73,7 +72,7 @@ func (hps HostPorts) Unique() HostPorts {
 // If there are no suitable addresses then an empty slice is returned.
 func (hps HostPorts) PrioritizeInternal(machineLocal bool) []string {
 	indexes := prioritizedAddressIndexes(len(hps), func(i int) Address {
-		return hps[i].Address()
+		return hps[i].(Address)
 	}, internalAddressMatcher(machineLocal))
 
 	out := make([]string, 0, len(indexes))
