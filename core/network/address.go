@@ -297,7 +297,7 @@ func (a ProviderAddress) GoString() string {
 //	public:c2-54-226-162-124.compute-1.amazonaws.com@public-api(id:42)
 //
 // If the SpaceName is blank, the "@<space-name>" suffix will be omitted.
-// Finally, if the SpaceProviderId is empty the suffix
+// Finally, if the ProviderSpaceID is empty the suffix
 // "(id:<space-provider-id>)" part will be omitted as well.
 func (a ProviderAddress) String() string {
 	var buf bytes.Buffer
