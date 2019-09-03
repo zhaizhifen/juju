@@ -394,7 +394,7 @@ func (s *AddressSuite) TestSelectPublicAddress(c *gc.C) {
 	for i, t := range selectPublicTests {
 		c.Logf("test %d: %s", i, t.about)
 		expectAddr, expectOK := t.expected()
-		actualAddr, actualOK := network.SelectPublicAddress(t.addresses)
+		actualAddr, actualOK := t.addresses.OneMatchingScope(network.ScopeMatchPublic)
 		c.Check(actualOK, gc.Equals, expectOK)
 		c.Check(actualAddr, gc.Equals, expectAddr)
 	}
@@ -460,7 +460,7 @@ func (s *AddressSuite) TestSelectInternalAddress(c *gc.C) {
 	for i, t := range selectInternalTests {
 		c.Logf("test %d: %s", i, t.about)
 		expectAddr, expectOK := t.expected()
-		actualAddr, actualOK := t.addresses.SelectInternalAddress(false)
+		actualAddr, actualOK := t.addresses.OneMatchingScope(network.ScopeMatchCloudLocal)
 		c.Check(actualOK, gc.Equals, expectOK)
 		c.Check(actualAddr, gc.Equals, expectAddr)
 	}
@@ -547,17 +547,17 @@ func (s *AddressSuite) TestSelectInternalMachineAddress(c *gc.C) {
 	for i, t := range selectInternalMachineTests {
 		c.Logf("test %d: %s", i, t.about)
 		expectAddr, expectOK := t.expected()
-		actualAddr, actualOK := t.addresses.SelectInternalAddress(true)
+		actualAddr, actualOK := t.addresses.OneMatchingScope(network.ScopeMatchMachineOrCloudLocal)
 		c.Check(actualOK, gc.Equals, expectOK)
 		c.Check(actualAddr, gc.Equals, expectAddr)
 	}
 }
 
 type selectInternalAddressesTest struct {
-	about        string
-	addresses    []network.SpaceAddress
-	machineLocal bool
-	expected     []network.SpaceAddress
+	about     string
+	addresses network.SpaceAddresses
+	matcher   network.ScopeMatchFunc
+	expected  network.SpaceAddresses
 }
 
 var selectInternalAddressesTests = []selectInternalAddressesTest{
@@ -568,7 +568,7 @@ var selectInternalAddressesTests = []selectInternalAddressesTest{
 			network.NewScopedSpaceAddress("10.0.0.9", network.ScopeCloudLocal),
 			network.NewScopedSpaceAddress("fc00::1", network.ScopePublic),
 		},
-		machineLocal: true,
+		matcher: network.ScopeMatchMachineOrCloudLocal,
 		expected: []network.SpaceAddress{
 			network.NewScopedSpaceAddress("127.0.0.1", network.ScopeMachineLocal),
 			network.NewScopedSpaceAddress("10.0.0.9", network.ScopeCloudLocal),
@@ -583,7 +583,7 @@ var selectInternalAddressesTests = []selectInternalAddressesTest{
 			network.NewScopedSpaceAddress("cloud-local2.internal", network.ScopeCloudLocal),
 			network.NewScopedSpaceAddress("fc00::1", network.ScopePublic),
 		},
-		machineLocal: false,
+		matcher: network.ScopeMatchCloudLocal,
 		expected: []network.SpaceAddress{
 			network.NewScopedSpaceAddress("cloud-local.internal", network.ScopeCloudLocal),
 			network.NewScopedSpaceAddress("cloud-local2.internal", network.ScopeCloudLocal),
@@ -595,15 +595,15 @@ var selectInternalAddressesTests = []selectInternalAddressesTest{
 			network.NewScopedSpaceAddress("169.254.1.1", network.ScopeLinkLocal),
 			network.NewScopedSpaceAddress("127.0.0.1", network.ScopeMachineLocal),
 		},
-		machineLocal: false,
-		expected:     nil,
+		matcher:  network.ScopeMatchCloudLocal,
+		expected: nil,
 	},
 }
 
 func (s *AddressSuite) TestSelectInternalAddresses(c *gc.C) {
 	for i, t := range selectInternalAddressesTests {
 		c.Logf("test %d: %s", i, t.about)
-		actualAddr := network.SelectInternalAddresses(t.addresses, t.machineLocal)
+		actualAddr := t.addresses.AllMatchingScope(t.matcher)
 		c.Check(actualAddr, gc.DeepEquals, t.expected)
 	}
 }

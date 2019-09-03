@@ -493,8 +493,8 @@ func (st *State) machineDocForTemplate(template MachineTemplate, id string) *mac
 	// no address is available, in which case the empty address is returned
 	// and setting the preferred address to an empty one is the correct
 	// thing to do when none is available.
-	privateAddr, _ := template.Addresses.SelectInternalAddress(false)
-	publicAddr, _ := network.SelectPublicAddress(template.Addresses)
+	privateAddr, _ := template.Addresses.OneMatchingScope(network.ScopeMatchCloudLocal)
+	publicAddr, _ := template.Addresses.OneMatchingScope(network.ScopeMatchPublic)
 	logger.Infof(
 		"new machine %q has preferred addresses: private %q, public %q",
 		id, privateAddr, publicAddr,

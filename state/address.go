@@ -55,7 +55,7 @@ func (st *State) controllerAddresses() ([]string, error) {
 	}
 	apiAddrs := make([]string, 0, len(allAddresses))
 	for _, addrs := range allAddresses {
-		addr, ok := networkAddresses(addrs.Addresses).SelectInternalAddress(false)
+		addr, ok := networkAddresses(addrs.Addresses).OneMatchingScope(network.ScopeMatchCloudLocal)
 		if ok {
 			apiAddrs = append(apiAddrs, addr.Value)
 		}
@@ -302,11 +302,11 @@ func (st *State) apiHostPortsForCAAS(public bool) (addresses []network.SpaceHost
 
 	// select public address.
 	if public {
-		addr, _ := network.SelectPublicAddress(addrs)
+		addr, _ := addrs.OneMatchingScope(network.ScopeMatchPublic)
 		return addrsToHostPorts(addr), nil
 	}
 	// select internal address.
-	return addrsToHostPorts(network.SelectInternalAddresses(addrs, false)...), nil
+	return addrsToHostPorts(addrs.AllMatchingScope(network.ScopeMatchCloudLocal)...), nil
 }
 
 // apiHostPortsForKey returns API addresses extracted from the document

@@ -1244,12 +1244,12 @@ func (u *Unit) serviceAddress(scope string) (corenetwork.SpaceAddress, error) {
 		return corenetwork.SpaceAddress{}, network.NoAddressError(scope)
 	}
 	getStrictPublicAddr := func(addresses corenetwork.SpaceAddresses) (corenetwork.SpaceAddress, bool) {
-		addr, ok := corenetwork.SelectPublicAddress(addresses)
+		addr, ok := addresses.OneMatchingScope(corenetwork.ScopeMatchPublic)
 		return addr, ok && addr.Scope == corenetwork.ScopePublic
 	}
 
 	getInternalAddr := func(addresses corenetwork.SpaceAddresses) (corenetwork.SpaceAddress, bool) {
-		return addresses.SelectInternalAddress(false)
+		return addresses.OneMatchingScope(corenetwork.ScopeMatchCloudLocal)
 	}
 
 	var addrMatch func(corenetwork.SpaceAddresses) (corenetwork.SpaceAddress, bool)

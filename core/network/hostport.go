@@ -67,17 +67,14 @@ func (hps HostPorts) Unique() HostPorts {
 	return results
 }
 
-// PrioritizeInternal orders the HostPorts by best match for use as an endpoint
-// for juju internal communication and returns them in NetAddr form.
+// PrioritizedForScope orders the HostPorts by best match for the input scope
+// matching function and returns them in NetAddr form.
 // If there are no suitable addresses then an empty slice is returned.
-func (hps HostPorts) PrioritizeInternal(machineLocal bool) []string {
-	indexes := prioritizedAddressIndexes(len(hps), func(i int) Address {
-		return hps[i].(Address)
-	}, internalAddressMatcher(machineLocal))
-
-	out := make([]string, 0, len(indexes))
-	for _, index := range indexes {
-		out = append(out, DialAddress(hps[index]))
+func (hps HostPorts) PrioritizedForScope(getMatcher ScopeMatchFunc) []string {
+	indexes := indexesByScopeMatch(len(hps), func(i int) Address { return hps[i].(Address) }, getMatcher)
+	out := make([]string, len(indexes))
+	for i, index := range indexes {
+		out[i] = DialAddress(hps[index])
 	}
 	return out
 }
@@ -309,14 +306,10 @@ func (hps SpaceHostPorts) InSpaces(spaces ...SpaceInfo) (SpaceHostPorts, bool) {
 	return hps, false
 }
 
-// SelectInternal picks the best matching HostPorts that can be used as an
-// endpoint for juju internal communication and returns them in NetAddr form.
-// If there are no suitable addresses, an empty slice is returned.
-func (hps SpaceHostPorts) SelectInternal(machineLocal bool) []string {
-	indexes := bestAddressIndexes(len(hps), func(i int) Address {
-		return hps[i].SpaceAddress
-	}, internalAddressMatcher(machineLocal))
-
+// AllMatchingScope returns the HostPorts that best satisfy the input scope
+// matching function, as strings usable as arguments to net.Dial.
+func (hps SpaceHostPorts) AllMatchingScope(getMatcher ScopeMatchFunc) []string {
+	indexes := indexesForScope(len(hps), func(i int) Address { return hps[i].SpaceAddress }, getMatcher)
 	out := make([]string, 0, len(indexes))
 	for _, index := range indexes {
 		out = append(out, DialAddress(hps[index]))

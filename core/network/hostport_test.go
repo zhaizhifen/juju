@@ -448,7 +448,7 @@ var prioritizeInternalHostPortsTests = []selectInternalHostPortsTest{{
 func (s *HostPortSuite) TestPrioritizeInternalHostPorts(c *gc.C) {
 	for i, t := range prioritizeInternalHostPortsTests {
 		c.Logf("test %d: %s", i, t.about)
-		prioritized := t.addresses.HostPorts().PrioritizeInternal(false)
+		prioritized := t.addresses.HostPorts().PrioritizedForScope(network.ScopeMatchCloudLocal)
 		c.Check(prioritized, gc.DeepEquals, t.expected)
 	}
 }
@@ -501,6 +501,6 @@ var selectInternalHostPortsTests = []selectInternalHostPortsTest{{
 func (s *HostPortSuite) TestSelectInternalHostPorts(c *gc.C) {
 	for i, t := range selectInternalHostPortsTests {
 		c.Logf("test %d: %s", i, t.about)
-		c.Check(t.addresses.SelectInternal(false), gc.DeepEquals, t.expected)
+		c.Check(t.addresses.AllMatchingScope(network.ScopeMatchCloudLocal), gc.DeepEquals, t.expected)
 	}
 }

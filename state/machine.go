@@ -1633,7 +1633,7 @@ func (m *Machine) setPublicAddressOps(providerAddresses []address, machineAddres
 	}
 	// Without an exact match, prefer a fallback match.
 	getAddr := func(addresses []address) corenetwork.SpaceAddress {
-		addr, _ := corenetwork.SelectPublicAddress(networkAddresses(addresses))
+		addr, _ := networkAddresses(addresses).OneMatchingScope(corenetwork.ScopeMatchPublic)
 		return addr
 	}
 
@@ -1656,7 +1656,7 @@ func (m *Machine) setPrivateAddressOps(providerAddresses []address, machineAddre
 	}
 	// Without an exact match, prefer a fallback match.
 	getAddr := func(addresses []address) corenetwork.SpaceAddress {
-		addr, _ := networkAddresses(addresses).SelectInternalAddress(false)
+		addr, _ := networkAddresses(addresses).OneMatchingScope(corenetwork.ScopeMatchCloudLocal)
 		return addr
 	}
 

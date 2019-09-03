@@ -76,6 +76,20 @@ const (
 	ScopeLinkLocal    Scope = "link-local"
 )
 
+// ScopeMatch is a numeric designation of how well the requirement
+// for satisfying a scope is met.
+type ScopeMatch int
+
+const (
+	invalidScope ScopeMatch = iota
+	exactScopeIPv4
+	exactScope
+	firstFallbackScopeIPv4
+	firstFallbackScope
+	secondFallbackScopeIPv4
+	secondFallbackScope
+)
+
 // Address describes methods for returning details
 // about an IP address or host name.
 type Address interface {
@@ -88,6 +102,10 @@ type Address interface {
 	// AddressScope returns the scope of the address.
 	AddressScope() Scope
 }
+
+// ScopeMatchFunc is an alias for a function that accepts an Address,
+// and returns what kind of scope match is determined by the body.
+type ScopeMatchFunc = func(addr Address) ScopeMatch
 
 // ExactScopeMatch checks if an address exactly
 // matches any of the specified scopes.
@@ -371,22 +389,15 @@ func (pas ProviderAddresses) ToSpaceAddresses(lookup SpaceLookup) (SpaceAddresse
 	return sas, nil
 }
 
-// BestControllerAddress returns the most suitable address to use as a Juju
-// Controller (API/state server) endpoint.
-// The second return value is false when no address can be returned.
-// When machineLocal is true both ScopeCloudLocal and ScopeMachineLocal
-// addresses are considered during the selection,
-// otherwise just ScopeCloudLocal are.
-// This method is used on ProviderAddresses, because it is used to select an
-// address from those returned by `instance.Addresses` before Mongo is started.
-// The logic is the same as for SpaceAddress.SelectInternalAddress.
-func (pas ProviderAddresses) BestControllerAddress(machineLocal bool) (ProviderAddress, bool) {
-	index := bestAddressIndex(len(pas), func(i int) Address { return pas[i] }, internalAddressMatcher(machineLocal))
-	if index < 0 {
+// OneMatchingScope returns the address that best satisfies the input scope
+// matching function. The boolean return indicates if a match was found.
+func (pas ProviderAddresses) OneMatchingScope(getMatcher ScopeMatchFunc) (ProviderAddress, bool) {
+	indexes := indexesForScope(len(pas), func(i int) Address { return pas[i] }, getMatcher)
+	if len(indexes) == 0 {
 		return ProviderAddress{}, false
 	}
-	addr := pas[index]
-	logger.Debugf("selected %q as controller address, using scope %q", addr.Value, addr.Scope)
+	addr := pas[indexes[0]]
+	logger.Debugf("selected %q as address, using scope %q", addr.Value, addr.Scope)
 	return addr, true
 }
 
@@ -499,17 +510,28 @@ func (sas SpaceAddresses) InSpaces(spaces ...SpaceInfo) (SpaceAddresses, bool) {
 	return sas, false
 }
 
-// SelectInternalAddress picks one address that can be used as an endpoint for
-// juju internal communication.
-// If there are no suitable addresses, then ok is false (and an empty address
-// is returned).
-// If a suitable address was found then ok is true.
-func (sas SpaceAddresses) SelectInternalAddress(machineLocal bool) (SpaceAddress, bool) {
-	index := bestAddressIndex(len(sas), func(i int) Address { return sas[i] }, internalAddressMatcher(machineLocal))
-	if index < 0 {
+// OneMatchingScope returns the address that best satisfies the input scope
+// matching function. The boolean return indicates if a match was found.
+func (sas SpaceAddresses) OneMatchingScope(getMatcher ScopeMatchFunc) (SpaceAddress, bool) {
+	addrs := sas.AllMatchingScope(getMatcher)
+	if len(addrs) == 0 {
 		return SpaceAddress{}, false
 	}
-	return sas[index], true
+	return addrs[0], true
+}
+
+// AllMatchingScope returns the addresses that best satisfy the input scope
+// matching function.
+func (sas SpaceAddresses) AllMatchingScope(getMatcher ScopeMatchFunc) SpaceAddresses {
+	indexes := indexesForScope(len(sas), func(i int) Address { return sas[i] }, getMatcher)
+	if len(indexes) == 0 {
+		return nil
+	}
+	out := make(SpaceAddresses, len(indexes))
+	for i, index := range indexes {
+		out[i] = sas[index]
+	}
+	return out
 }
 
 // DeriveAddressType attempts to detect the type of address given.
@@ -528,40 +550,10 @@ func DeriveAddressType(value string) AddressType {
 	}
 }
 
-// SelectPublicAddress picks one address from a slice that would be
-// appropriate to display as a publicly accessible endpoint.
-// If there are no suitable addresses, then ok is false
-// (and an empty address is returned).
-// If a suitable address is then ok is true.
-func SelectPublicAddress(addresses []SpaceAddress) (SpaceAddress, bool) {
-	index := bestAddressIndex(len(addresses), func(i int) Address {
-		return addresses[i]
-	}, publicMatch)
-	if index < 0 {
-		return SpaceAddress{}, false
-	}
-	return addresses[index], true
-}
-
-// SelectInternalAddresses picks the best addresses from a slice that can be
-// used as an endpoint for juju internal communication.
-// I nil slice is returned if there are no suitable addresses identified.
-func SelectInternalAddresses(addresses []SpaceAddress, machineLocal bool) []SpaceAddress {
-	indexes := bestAddressIndexes(len(addresses), func(i int) Address {
-		return addresses[i]
-	}, internalAddressMatcher(machineLocal))
-	if len(indexes) == 0 {
-		return nil
-	}
-
-	out := make([]SpaceAddress, 0, len(indexes))
-	for _, index := range indexes {
-		out = append(out, addresses[index])
-	}
-	return out
-}
-
-func publicMatch(addr Address) scopeMatch {
+// ScopeMatchPublic is an address scope matching function for determining the
+// extent to which the input address' scope satisfies a requirement for public
+// accessibility.
+func ScopeMatchPublic(addr Address) ScopeMatch {
 	switch addr.AddressScope() {
 	case ScopePublic:
 		if addr.AddressType() == IPv4Address {
@@ -582,14 +574,21 @@ func publicMatch(addr Address) scopeMatch {
 	return invalidScope
 }
 
-func internalAddressMatcher(machineLocal bool) scopeMatchFunc {
-	if machineLocal {
-		return cloudOrMachineLocalMatch
+func ScopeMatchMachineOrCloudLocal(addr Address) ScopeMatch {
+	if addr.AddressScope() == ScopeMachineLocal {
+		if addr.AddressType() == IPv4Address {
+			return exactScopeIPv4
+		}
+		return exactScope
 	}
-	return cloudLocalMatch
+	return ScopeMatchCloudLocal(addr)
 }
 
-func cloudLocalMatch(addr Address) scopeMatch {
+// ScopeMatchCloudLocal is an address scope matching function for determining
+// the extent to which the input address' scope satisfies a requirement for
+// accessibility from within the local cloud.
+// Machine-only addresses do not satisfy this matcher.
+func ScopeMatchCloudLocal(addr Address) ScopeMatch {
 	switch addr.AddressScope() {
 	case ScopeCloudLocal:
 		if addr.AddressType() == IPv4Address {
@@ -610,69 +609,30 @@ func cloudLocalMatch(addr Address) scopeMatch {
 	return invalidScope
 }
 
-func cloudOrMachineLocalMatch(addr Address) scopeMatch {
-	if addr.AddressScope() == ScopeMachineLocal {
-		if addr.AddressType() == IPv4Address {
-			return exactScopeIPv4
-		}
-		return exactScope
-	}
-	return cloudLocalMatch(addr)
-}
-
-type scopeMatch int
-
-const (
-	invalidScope scopeMatch = iota
-	exactScopeIPv4
-	exactScope
-	firstFallbackScopeIPv4
-	firstFallbackScope
-	secondFallbackScopeIPv4
-	secondFallbackScope
-)
-
-type scopeMatchFunc func(addr Address) scopeMatch
-
 type addressByIndexFunc func(index int) Address
 
-// bestAddressIndex returns the index of the addresses with the best matching
-// scope (according to the matchFunc). -1 is returned if there were no suitable
-// addresses.
-func bestAddressIndex(numAddr int, getAddrFunc addressByIndexFunc, matchFunc scopeMatchFunc) int {
-	indexes := bestAddressIndexes(numAddr, getAddrFunc, matchFunc)
-	if len(indexes) > 0 {
-		return indexes[0]
-	}
-	return -1
-}
-
-// bestAddressIndexes returns the indexes of the addresses with the best
-// matching scope and type (according to the matchFunc). An empty slice is
-// returned if there were no suitable addresses.
-func bestAddressIndexes(numAddr int, getAddrFunc addressByIndexFunc, matchFunc scopeMatchFunc) []int {
-	// Categorise addresses by scope and type matching quality.
+// indexesForScope returns the indexes of the addresses with the best
+// matching scope and type (according to the matchFunc).
+// An empty slice is returned if there were no suitable addresses.
+func indexesForScope(numAddr int, getAddrFunc addressByIndexFunc, matchFunc ScopeMatchFunc) []int {
 	matches := filterAndCollateAddressIndexes(numAddr, getAddrFunc, matchFunc)
 
-	// Retrieve the indexes of the addresses with the best scope and type match.
-	allowedMatchTypes := []scopeMatch{exactScopeIPv4, exactScope, firstFallbackScopeIPv4, firstFallbackScope, secondFallbackScopeIPv4, secondFallbackScope}
-	for _, matchType := range allowedMatchTypes {
+	for _, matchType := range scopeMatchHierarchy() {
 		indexes, ok := matches[matchType]
 		if ok && len(indexes) > 0 {
 			return indexes
 		}
 	}
-	return []int{}
+	return nil
 }
 
-func prioritizedAddressIndexes(numAddr int, getAddrFunc addressByIndexFunc, matchFunc scopeMatchFunc) []int {
-	// Categorise addresses by scope and type matching quality.
+// indexesByScopeMatch filters address indexes by matching scope,
+// then returns them in descending order of best match.
+func indexesByScopeMatch(numAddr int, getAddrFunc addressByIndexFunc, matchFunc ScopeMatchFunc) []int {
 	matches := filterAndCollateAddressIndexes(numAddr, getAddrFunc, matchFunc)
 
-	// Retrieve the indexes of the addresses with the best scope and type match.
-	allowedMatchTypes := []scopeMatch{exactScopeIPv4, exactScope, firstFallbackScopeIPv4, firstFallbackScope, secondFallbackScopeIPv4, secondFallbackScope}
 	var prioritized []int
-	for _, matchType := range allowedMatchTypes {
+	for _, matchType := range scopeMatchHierarchy() {
 		indexes, ok := matches[matchType]
 		if ok && len(indexes) > 0 {
 			prioritized = append(prioritized, indexes...)
@@ -681,17 +641,28 @@ func prioritizedAddressIndexes(numAddr int, getAddrFunc addressByIndexFunc, matc
 	return prioritized
 }
 
-func filterAndCollateAddressIndexes(numAddr int, getAddrFunc addressByIndexFunc, matchFunc scopeMatchFunc) map[scopeMatch][]int {
-	// Categorise addresses by scope and type matching quality.
-	matches := make(map[scopeMatch][]int)
+// filterAndCollateAddressIndexes filters address indexes using the input scope
+// matching function, then returns the results grouped by scope match quality.
+// Invalid results are omitted.
+func filterAndCollateAddressIndexes(
+	numAddr int, getAddrFunc addressByIndexFunc, matchFunc ScopeMatchFunc,
+) map[ScopeMatch][]int {
+	matches := make(map[ScopeMatch][]int)
 	for i := 0; i < numAddr; i++ {
 		matchType := matchFunc(getAddrFunc(i))
-		switch matchType {
-		case exactScopeIPv4, exactScope, firstFallbackScopeIPv4, firstFallbackScope, secondFallbackScopeIPv4, secondFallbackScope:
+		if matchType != invalidScope {
 			matches[matchType] = append(matches[matchType], i)
 		}
 	}
 	return matches
+}
+
+func scopeMatchHierarchy() []ScopeMatch {
+	return []ScopeMatch{
+		exactScopeIPv4, exactScope,
+		firstFallbackScopeIPv4, firstFallbackScope,
+		secondFallbackScopeIPv4, secondFallbackScope,
+	}
 }
 
 type addressesPreferringIPv4Slice []SpaceAddress
