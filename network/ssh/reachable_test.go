@@ -37,22 +37,22 @@ func (s *SSHReachableHostPortSuite) TestAllUnreachable(c *gc.C) {
 	unreachableHPs := closedTCPHostPorts(c, 10)
 	best, err := checker.FindHost(unreachableHPs, nil)
 	c.Check(err, gc.ErrorMatches, "cannot connect to any address: .*")
-	c.Check(best, gc.Equals, network.HostPort{})
+	c.Check(best, gc.Equals, network.SpaceHostPort{})
 }
 
 func (s *SSHReachableHostPortSuite) TestReachableInvalidPublicKey(c *gc.C) {
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		// We use Key2, but are looking for Pub1
 		testSSHServer(c, s, sshtesting.SSHKey2),
 	}
 	checker := makeChecker()
 	best, err := checker.FindHost(hostPorts, []string{sshtesting.SSHPub1})
 	c.Check(err, gc.ErrorMatches, "cannot connect to any address: .*")
-	c.Check(best, gc.Equals, network.HostPort{})
+	c.Check(best, gc.Equals, network.SpaceHostPort{})
 }
 
 func (s *SSHReachableHostPortSuite) TestReachableValidPublicKey(c *gc.C) {
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		testSSHServer(c, s, sshtesting.SSHKey1),
 	}
 	checker := makeChecker()
@@ -65,7 +65,7 @@ func (s *SSHReachableHostPortSuite) TestReachableMixedPublicKeys(c *gc.C) {
 	// One is just closed, one is TCP only, one is SSH but the wrong key, one
 	// is SSH with the right key
 	fakeHostPort := closedTCPHostPorts(c, 1)[0]
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		fakeHostPort,
 		testTCPServer(c, s),
 		testSSHServer(c, s, sshtesting.SSHKey2),
@@ -79,7 +79,7 @@ func (s *SSHReachableHostPortSuite) TestReachableMixedPublicKeys(c *gc.C) {
 
 func (s *SSHReachableHostPortSuite) TestReachableNoPublicKeysPassed(c *gc.C) {
 	fakeHostPort := closedTCPHostPorts(c, 1)[0]
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		fakeHostPort,
 		testTCPServer(c, s),
 		testSSHServer(c, s, sshtesting.SSHKey1),
@@ -93,18 +93,18 @@ func (s *SSHReachableHostPortSuite) TestReachableNoPublicKeysPassed(c *gc.C) {
 
 func (s *SSHReachableHostPortSuite) TestReachableNoPublicKeysAvailable(c *gc.C) {
 	fakeHostPort := closedTCPHostPorts(c, 1)[0]
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		fakeHostPort,
 		testTCPServer(c, s),
 	}
 	checker := makeChecker()
 	best, err := checker.FindHost(hostPorts, []string{sshtesting.SSHPub1})
 	c.Check(err, gc.ErrorMatches, "cannot connect to any address: .*")
-	c.Check(best, gc.Equals, network.HostPort{})
+	c.Check(best, gc.Equals, network.SpaceHostPort{})
 }
 
 func (s *SSHReachableHostPortSuite) TestMultiplePublicKeys(c *gc.C) {
-	hostPorts := []network.HostPort{
+	hostPorts := []network.SpaceHostPort{
 		testSSHServer(c, s, sshtesting.SSHKey1, sshtesting.SSHKey2),
 	}
 	checker := makeChecker()
@@ -116,8 +116,8 @@ func (s *SSHReachableHostPortSuite) TestMultiplePublicKeys(c *gc.C) {
 // closedTCPHostPorts opens and then immediately closes a bunch of ports and
 // saves their port numbers so we're unlikely to find a real listener at that
 // address.
-func closedTCPHostPorts(c *gc.C, count int) []network.HostPort {
-	ports := make([]network.HostPort, count)
+func closedTCPHostPorts(c *gc.C, count int) []network.SpaceHostPort {
+	ports := make([]network.SpaceHostPort, count)
 	for i := 0; i < count; i++ {
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		c.Assert(err, jc.ErrorIsNil)
@@ -136,7 +136,7 @@ type Cleaner interface {
 }
 
 // testTCPServer only listens on the socket, but doesn't speak SSH
-func testTCPServer(c *gc.C, cleaner Cleaner) network.HostPort {
+func testTCPServer(c *gc.C, cleaner Cleaner) network.SpaceHostPort {
 	listenAddress, shutdown := sshtesting.CreateTCPServer(c, func(tcpConn net.Conn) {
 		// We accept a connection, but then immediately close.
 		tcpConn.Close()
@@ -150,7 +150,7 @@ func testTCPServer(c *gc.C, cleaner Cleaner) network.HostPort {
 
 // testSSHServer will listen on the socket and respond with the appropriate
 // public key information and then die.
-func testSSHServer(c *gc.C, cleaner Cleaner, privateKeys ...string) network.HostPort {
+func testSSHServer(c *gc.C, cleaner Cleaner, privateKeys ...string) network.SpaceHostPort {
 	address, shutdown := sshtesting.CreateSSHServer(c, privateKeys...)
 	hostPort, err := network.ParseHostPort(address)
 	c.Assert(err, jc.ErrorIsNil)

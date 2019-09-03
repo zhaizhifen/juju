@@ -31,7 +31,7 @@ type ReachableChecker interface {
 	// and tries to do an SSH key negotiation. The first successful negotiation
 	// that includes one of the public keys supplied will be returned. If none
 	// of them can be validated, then an error will be returned.
-	FindHost(hostPorts []network.HostPort, publicKeys []string) (network.HostPort, error)
+	FindHost(hostPorts network.HostPorts, publicKeys []string) (network.HostPort, error)
 }
 
 // NewReachableChecker creates a ReachableChecker that can be used to check for
@@ -67,7 +67,7 @@ type hostKeyChecker struct {
 	// HostPort is the identifier that corresponds to this connection
 	HostPort network.HostPort
 
-	// Accepted will be passed HostPort if it validated the connection
+	// Accepted will be passed SpaceHostPort if it validated the connection
 	Accepted chan network.HostPort
 
 	// Dialer is a Dialer that allows us to initiate the underlying TCP connection
@@ -127,7 +127,7 @@ func publicKeysToSet(publicKeys []string) set.Strings {
 	return acceptedKeys
 }
 
-// Check initiates a connection to HostPort and tries to do an SSH key
+// Check initiates a connection to SpaceHostPort and tries to do an SSH key
 // exchange to determine the preferred public key of the remote host.
 // It then checks if that key is in the accepted set of keys.
 func (h *hostKeyChecker) Check() {
@@ -147,10 +147,10 @@ func (h *hostKeyChecker) Check() {
 	// it has been updated to use a ECDSA key as well. Gocrypto/ssh might
 	// negotiate to use the "more secure" ECDSA key and we will see that
 	// as an invalid key.
-	sshconfig := &ssh.ClientConfig{
+	sshConfig := &ssh.ClientConfig{
 		HostKeyCallback: h.hostKeyCallback,
 	}
-	addr := h.HostPort.NetAddr()
+	addr := network.DialAddress(h.HostPort)
 	logger.Debugf("dialing %s to check host keys", addr)
 	conn, err := h.Dialer.Dial("tcp", addr)
 	if err != nil {
@@ -160,17 +160,17 @@ func (h *hostKeyChecker) Check() {
 	// No need to do the key exchange if we're already stopping
 	select {
 	case <-h.Stop:
-		conn.Close()
+		_ = conn.Close()
 		return
 	default:
 	}
 	logger.Debugf("connected to %s, initiating ssh handshake", addr)
 	// NewClientConn will close the underlying net.Conn if it gets an error
-	client, _, _, err := ssh.NewClientConn(conn, addr, sshconfig)
+	client, _, _, err := ssh.NewClientConn(conn, addr, sshConfig)
 	if err == nil {
 		// We don't expect this case, because we don't support Auth,
 		// but make sure to close it anyway.
-		client.Close()
+		_ = client.Close()
 	} else {
 		// no need to log these two messages, that's already been done
 		// in hostKeyCallback
@@ -192,8 +192,8 @@ type reachableChecker struct {
 // if the SSH server's negotiated public key is in our allowed set. The first
 // address to successfully negotiate will be returned. If none of them succeed,
 // and error will be returned.
-func (r *reachableChecker) FindHost(hostPorts []network.HostPort, publicKeys []string) (network.HostPort, error) {
-	uniqueHPs := network.UniqueHostPorts(hostPorts)
+func (r *reachableChecker) FindHost(hostPorts network.HostPorts, publicKeys []string) (network.HostPort, error) {
+	uniqueHPs := hostPorts.Unique()
 	successful := make(chan network.HostPort)
 	stop := make(chan struct{})
 	// We use a channel instead of a sync.WaitGroup so that we can return as
@@ -228,5 +228,5 @@ func (r *reachableChecker) FindHost(hostPorts []network.HostPort, publicKeys []s
 		}
 	}
 	close(stop)
-	return network.HostPort{}, errors.Errorf("cannot connect to any address: %v", hostPorts)
+	return nil, errors.Errorf("cannot connect to any address: %v", hostPorts)
 }
