@@ -6,6 +6,7 @@ package network_test
 import (
 	"fmt"
 
+	"github.com/juju/errors"
 	jc "github.com/juju/testing/checkers"
 	gc "gopkg.in/check.v1"
 
@@ -503,4 +504,38 @@ func (s *HostPortSuite) TestSelectInternalHostPorts(c *gc.C) {
 		c.Logf("test %d: %s", i, t.about)
 		c.Check(t.addresses.AllMatchingScope(network.ScopeMatchCloudLocal), gc.DeepEquals, t.expected)
 	}
+}
+
+func (s *HostPortSuite) TestSpaceHostPortsToProviderHostPorts(c *gc.C) {
+	// Check success.
+	hps := network.NewSpaceHostPorts(1234, "1.2.3.4", "2.3.4.5", "3.4.5.6")
+	hps[0].SpaceID = "1"
+	hps[1].SpaceID = "2"
+
+	exp := network.ProviderHostPorts{
+		{
+			ProviderAddress: network.NewProviderAddressInSpace("space-one", "1.2.3.4"),
+			NetPort:         1234,
+		},
+		{
+			ProviderAddress: network.NewProviderAddressInSpace("space-two", "2.3.4.5"),
+			NetPort:         1234,
+		},
+		{
+			ProviderAddress: network.NewProviderAddress("3.4.5.6"),
+			NetPort:         1234,
+		},
+	}
+	// Only the first address in the lookup has a provider ID.
+	exp[0].ProviderSpaceID = "p1"
+
+	res, err := hps.ToProviderHostPorts(stubLookup{})
+	c.Assert(err, jc.ErrorIsNil)
+	c.Check(res, jc.SameContents, exp)
+
+	// Add a host/port in a space that the lookup will not resolve.
+	hps = append(hps, network.NewSpaceHostPorts(3456, "4.5.6.7")...)
+	hps[3].SpaceID = "3"
+	_, err = hps.ToProviderHostPorts(stubLookup{})
+	c.Assert(err, jc.Satisfies, errors.IsNotFound)
 }

@@ -327,7 +327,11 @@ func (hps SpaceHostPorts) ToProviderHostPorts(lookup SpaceLookup) (ProviderHostP
 
 	pHPs := make(ProviderHostPorts, len(hps))
 	for i, hp := range hps {
-		pHPs[i] = ProviderHostPort{ProviderAddress: ProviderAddress{MachineAddress: hp.MachineAddress}}
+		pHPs[i] = ProviderHostPort{
+			ProviderAddress: ProviderAddress{MachineAddress: hp.MachineAddress},
+			NetPort:         hp.NetPort,
+		}
+
 		if hp.SpaceID != "" {
 			info, ok := infoFor[hp.SpaceID]
 			if !ok {
