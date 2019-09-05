@@ -126,7 +126,7 @@ func (a *InstancePollerAPI) getOneMachine(tag string, canAccess common.AuthFunc)
 	return machine, nil
 }
 
-// ProviderAddresses returns the list of all known provider addresses
+// ToProviderAddresses returns the list of all known provider addresses
 // for each given entity. Only machine tags are accepted.
 func (a *InstancePollerAPI) ProviderAddresses(args params.Entities) (params.MachineAddressesResults, error) {
 	result := params.MachineAddressesResults{
@@ -138,11 +138,19 @@ func (a *InstancePollerAPI) ProviderAddresses(args params.Entities) (params.Mach
 	}
 	for i, arg := range args.Entities {
 		machine, err := a.getOneMachine(arg.Tag, canAccess)
-		if err == nil {
-			addrs := machine.ProviderAddresses()
-			result.Results[i].Addresses = params.FromNetworkAddresses(addrs...)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
 		}
-		result.Results[i].Error = common.ServerError(err)
+
+		addrs, err := machine.ProviderAddresses().ToProviderAddresses(a.st)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
+		}
+
+		result.Results[i].Addresses = params.FromProviderAddresses(addrs...)
+
 	}
 	return result, nil
 }
@@ -159,11 +167,19 @@ func (a *InstancePollerAPI) SetProviderAddresses(args params.SetMachinesAddresse
 	}
 	for i, arg := range args.MachineAddresses {
 		machine, err := a.getOneMachine(arg.Tag, canAccess)
-		if err == nil {
-			addrsToSet := params.NetworkAddresses(arg.Addresses...)
-			err = machine.SetProviderAddresses(addrsToSet...)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
 		}
-		result.Results[i].Error = common.ServerError(err)
+
+		addrsToSet, err := params.ToProviderAddresses(arg.Addresses...).ToSpaceAddresses(a.st)
+		if err != nil {
+			result.Results[i].Error = common.ServerError(err)
+			continue
+		}
+		if err := machine.SetProviderAddresses(addrsToSet...); err != nil {
+			result.Results[i].Error = common.ServerError(err)
+		}
 	}
 	return result, nil
 }
