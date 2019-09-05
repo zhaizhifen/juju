@@ -23,7 +23,6 @@ import (
 	"github.com/juju/juju/caas"
 	"github.com/juju/juju/cloud"
 	"github.com/juju/juju/core/migration"
-	"github.com/juju/juju/core/network"
 	"github.com/juju/juju/core/status"
 	"github.com/juju/juju/environs"
 	"github.com/juju/juju/environs/config"
@@ -1675,8 +1674,9 @@ func (s *modelManagerStateSuite) TestModelInfoForMigratedModel(c *gc.C) {
 
 	var info params.RedirectErrorInfo
 	c.Assert(pErr.UnmarshalInfo(&info), jc.ErrorIsNil)
-	nhp := params.FromNetworkHostPorts(network.NewHostPorts(5555, "1.2.3.4"))
-	c.Assert(info.Servers, jc.DeepEquals, [][]params.HostPort{nhp})
+
+	nhp := params.HostPort{Address: params.Address{Value: "1.2.3.4"}, Port: 55555}
+	c.Assert(info.Servers, jc.DeepEquals, [][]params.HostPort{{nhp}})
 	c.Assert(info.CACert, gc.Equals, coretesting.CACert)
 	c.Assert(info.ControllerAlias, gc.Equals, "target")
 }
