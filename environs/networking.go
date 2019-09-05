@@ -94,7 +94,7 @@ type Networking interface {
 	ReleaseContainerAddresses(ctx context.ProviderCallContext, interfaces []network.ProviderInterfaceInfo) error
 
 	// SSHAddresses filters provided addresses for addresses usable for SSH
-	SSHAddresses(ctx context.ProviderCallContext, addresses []corenetwork.Address) ([]corenetwork.Address, error)
+	SSHAddresses(ctx context.ProviderCallContext, addresses corenetwork.SpaceAddresses) (corenetwork.SpaceAddresses, error)
 }
 
 // NetworkingEnviron combines the standard Environ interface with the
