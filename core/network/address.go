@@ -370,9 +370,16 @@ func NewProviderAddressesInSpace(spaceName string, inAddresses ...string) (outAd
 // ToSpaceAddresses transforms the ProviderAddresses to SpaceAddresses by using
 // the input lookup for conversion of space name to space ID.
 func (pas ProviderAddresses) ToSpaceAddresses(lookup SpaceLookup) (SpaceAddresses, error) {
-	idFor, err := lookup.SpaceIDsByName()
-	if err != nil {
-		return nil, errors.Trace(err)
+	if pas == nil {
+		return nil, nil
+	}
+
+	var idFor map[string]string
+	if len(pas) > 0 {
+		var err error
+		if idFor, err = lookup.SpaceIDsByName(); err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	sas := make(SpaceAddresses, len(pas))
@@ -466,9 +473,16 @@ func NewSpaceAddresses(inAddresses ...string) (outAddresses SpaceAddresses) {
 // ToProviderAddresses transforms the SpaceAddresses to ProviderAddresses by using
 // the input lookup for conversion of space ID to space info.
 func (sas SpaceAddresses) ToProviderAddresses(lookup SpaceLookup) (ProviderAddresses, error) {
-	infoFor, err := lookup.SpaceInfosByID()
-	if err != nil {
-		return nil, errors.Trace(err)
+	if sas == nil {
+		return nil, nil
+	}
+
+	var infoFor map[string]SpaceInfo
+	if len(sas) > 0 {
+		var err error
+		if infoFor, err = lookup.SpaceInfosByID(); err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	pas := make(ProviderAddresses, len(sas))

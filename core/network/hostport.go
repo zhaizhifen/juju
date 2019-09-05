@@ -320,9 +320,16 @@ func (hps SpaceHostPorts) AllMatchingScope(getMatcher ScopeMatchFunc) []string {
 // ToProviderAddresses transforms the SpaceAddresses to ProviderAddresses by using
 // the input lookup for conversion of space ID to space info.
 func (hps SpaceHostPorts) ToProviderHostPorts(lookup SpaceLookup) (ProviderHostPorts, error) {
-	infoFor, err := lookup.SpaceInfosByID()
-	if err != nil {
-		return nil, errors.Trace(err)
+	if hps == nil {
+		return nil, nil
+	}
+
+	var infoFor map[string]SpaceInfo
+	if len(hps) > 0 {
+		var err error
+		if infoFor, err = lookup.SpaceInfosByID(); err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	pHPs := make(ProviderHostPorts, len(hps))
