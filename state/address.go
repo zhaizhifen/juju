@@ -119,8 +119,7 @@ func (st *State) SetAPIHostPorts(newHostPorts []network.SpaceHostPorts) error {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		agentAddrOps, err := st.getOpsForHostPortsChange(
-			controllers, apiHostPortsForAgentsKey, newHostPortsForAgents)
+		agentAddrOps, err := st.getOpsForHostPortsChange(controllers, apiHostPortsForAgentsKey, newHostPortsForAgents)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -143,9 +142,7 @@ func (st *State) SetAPIHostPorts(newHostPorts []network.SpaceHostPorts) error {
 // If the current document indicates the same host/port collection as the
 // input, no operations are returned.
 func (st *State) getOpsForHostPortsChange(
-	mc mongo.Collection,
-	key string,
-	newHostPorts []network.SpaceHostPorts,
+	mc mongo.Collection, key string, newHostPorts []network.SpaceHostPorts,
 ) ([]txn.Op, error) {
 	var ops []txn.Op
 
