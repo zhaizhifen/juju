@@ -6,6 +6,8 @@ package caasunitprovisioner_test
 import (
 	"time"
 
+	"github.com/juju/juju/core/network"
+
 	"github.com/juju/clock/testclock"
 	"github.com/juju/errors"
 	"github.com/juju/testing"
@@ -366,7 +368,7 @@ func (s *WorkerSuite) TestScaleChangedInCluster(c *gc.C) {
 			params.UpdateApplicationServiceArg{
 				ApplicationTag: names.NewApplicationTag("gitlab").String(),
 				ProviderId:     "id",
-				Addresses:      []params.Address{{Value: "10.0.0.1"}},
+				Addresses:      params.FromProviderAddresses(network.NewProviderAddresses("10.0.0.1")...),
 				Scale:          intPtr(4),
 			},
 		})
