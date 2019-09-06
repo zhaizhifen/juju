@@ -257,7 +257,7 @@ type NamespaceWatcher interface {
 // Service represents information about the status of a caas service entity.
 type Service struct {
 	Id         string
-	Addresses  []network.Address
+	Addresses  network.ProviderAddresses
 	Scale      *int
 	Generation *int64
 	Status     status.StatusInfo

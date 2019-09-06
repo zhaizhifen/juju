@@ -883,8 +883,8 @@ func getLoadBalancerAddress(svc *core.Service) string {
 	return lpAdd
 }
 
-func getSvcAddresses(svc *core.Service, includeClusterIP bool) []network.Address {
-	var netAddrs []network.Address
+func getSvcAddresses(svc *core.Service, includeClusterIP bool) []network.ProviderAddress {
+	var netAddrs []network.ProviderAddress
 
 	addressExist := func(addr string) bool {
 		for _, v := range netAddrs {
@@ -897,11 +897,7 @@ func getSvcAddresses(svc *core.Service, includeClusterIP bool) []network.Address
 	appendUniqueAddrs := func(scope network.Scope, addrs ...string) {
 		for _, v := range addrs {
 			if v != "" && !addressExist(v) {
-				netAddrs = append(netAddrs, network.Address{
-					Value: v,
-					Type:  network.DeriveAddressType(v),
-					Scope: scope,
-				})
+				netAddrs = append(netAddrs, network.NewScopedProviderAddress(v, scope))
 			}
 		}
 	}
