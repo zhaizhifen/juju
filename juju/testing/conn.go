@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juju/juju/core/network"
+
 	"github.com/juju/clock"
 	"github.com/juju/cmd/cmdtesting"
 	"github.com/juju/collections/set"
@@ -616,7 +618,22 @@ func (s *JujuConnSuite) setUpConn(c *gc.C) {
 	s.APIState, err = api.Open(apiInfo, api.DialOpts{})
 	c.Assert(err, jc.ErrorIsNil)
 
-	err = s.State.SetAPIHostPorts(s.APIState.APIHostPorts())
+	// The machine host-ports recorded against the API need to be wrapped in
+	// space host-ports as accepted by state.
+	mHsPs := s.APIState.APIHostPorts()
+	sHsPs := make([]network.SpaceHostPorts, len(mHsPs))
+	for i, mHPs := range mHsPs {
+		sHPs := make(network.SpaceHostPorts, len(mHPs))
+		for j, mHP := range mHPs {
+			sHPs[j] = network.SpaceHostPort{
+				SpaceAddress: network.SpaceAddress{MachineAddress: mHP.MachineAddress},
+				NetPort:      mHP.NetPort,
+			}
+		}
+		sHsPs[i] = sHPs
+	}
+
+	err = s.State.SetAPIHostPorts(sHsPs)
 	c.Assert(err, jc.ErrorIsNil)
 
 	// Make sure the controller store has the controller api endpoint address set
