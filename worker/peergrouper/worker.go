@@ -57,7 +57,7 @@ type ControllerHost interface {
 	Status() (status.StatusInfo, error)
 	SetStatus(status.StatusInfo) error
 	Refresh() error
-	Addresses() []network.Address
+	Addresses() network.SpaceAddresses
 }
 
 type Space interface {
@@ -73,7 +73,7 @@ type MongoSession interface {
 }
 
 type APIHostPortsSetter interface {
-	SetAPIHostPorts([][]network.HostPort) error
+	SetAPIHostPorts([]network.SpaceHostPorts) error
 }
 
 var (
@@ -266,7 +266,7 @@ func (w *pgWorker) loop() error {
 			// A client requested the details be resent (probably
 			// because they just subscribed).
 			logger.Tracef("<-w.detailsRequests (from %q)", requester)
-			w.config.Hub.Publish(apiserver.DetailsTopic, w.serverDetails)
+			_, _ = w.config.Hub.Publish(apiserver.DetailsTopic, w.serverDetails)
 			continue
 		case <-updateChan:
 			// Scheduled update.
@@ -278,7 +278,7 @@ func (w *pgWorker) loop() error {
 		}
 
 		servers := w.apiServerHostPorts()
-		apiHostPorts := make([][]network.HostPort, 0, len(servers))
+		apiHostPorts := make([]network.SpaceHostPorts, 0, len(servers))
 		for _, serverHostPorts := range servers {
 			apiHostPorts = append(apiHostPorts, serverHostPorts)
 		}
@@ -390,7 +390,7 @@ func (w *pgWorker) updateControllerNodes() (bool, error) {
 	// Stop controller goroutines that no longer correspond to controller nodes.
 	for _, m := range w.controllerTrackers {
 		if !inStrings(m.Id(), controllerIds) {
-			worker.Stop(m)
+			_ = worker.Stop(m)
 			delete(w.controllerTrackers, m.Id())
 			changed = true
 		}
@@ -475,10 +475,10 @@ func inStrings(t string, ss []string) bool {
 }
 
 // apiServerHostPorts returns the host-ports for each apiserver controller.
-func (w *pgWorker) apiServerHostPorts() map[string][]network.HostPort {
-	servers := make(map[string][]network.HostPort)
+func (w *pgWorker) apiServerHostPorts() map[string]network.SpaceHostPorts {
+	servers := make(map[string]network.SpaceHostPorts)
 	for _, m := range w.controllerTrackers {
-		hostPorts := network.AddressesWithPort(m.Addresses(), w.config.APIPort)
+		hostPorts := network.SpaceAddressesWithPort(m.Addresses(), w.config.APIPort)
 		if len(hostPorts) == 0 {
 			continue
 		}
@@ -491,7 +491,7 @@ func (w *pgWorker) apiServerHostPorts() map[string][]network.HostPort {
 // known controller/replica-set topology if it has changed from the last known
 // state.
 func (w *pgWorker) publishAPIServerDetails(
-	servers map[string][]network.HostPort,
+	servers map[string]network.SpaceHostPorts,
 	members map[string]*replicaset.Member,
 ) {
 	details := apiserver.Details{
@@ -514,15 +514,16 @@ func (w *pgWorker) publishAPIServerDetails(
 			ID:              id,
 			InternalAddress: internalAddress,
 		}
-		for _, hp := range network.FilterUnusableHostPorts(hostPorts) {
-			server.Addresses = append(server.Addresses, hp.String())
+		//for _, hp := range network.FilterUnusableHostPorts(hostPorts.DialAddresses()) {
+		for _, hp := range hostPorts.HostPorts() {
+			server.Addresses = append(server.Addresses, network.DialAddress(hp))
 		}
 		sort.Strings(server.Addresses)
 		details.Servers[server.ID] = server
 	}
 
 	if !reflect.DeepEqual(w.serverDetails, details) {
-		w.config.Hub.Publish(apiserver.DetailsTopic, details)
+		_, _ = w.config.Hub.Publish(apiserver.DetailsTopic, details)
 		w.serverDetails = details
 	}
 }

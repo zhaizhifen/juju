@@ -95,7 +95,7 @@ func InitState(c *gc.C, st *fakeState, numNodes int, ipVersion TestIPVersion) {
 	for i := 10; i < 10+numNodes; i++ {
 		id := fmt.Sprint(i)
 		m := st.addController(id, true)
-		m.setAddresses(network.NewAddress(fmt.Sprintf(ipVersion.formatHost, i)))
+		m.setAddresses(network.NewSpaceAddress(fmt.Sprintf(ipVersion.formatHost, i)))
 		ids = append(ids, id)
 		c.Assert(m.Addresses(), gc.HasLen, 1)
 	}
@@ -110,10 +110,10 @@ func InitState(c *gc.C, st *fakeState, numNodes int, ipVersion TestIPVersion) {
 
 // ExpectedAPIHostPorts returns the expected addresses
 // of the nodes as created by InitState.
-func ExpectedAPIHostPorts(n int, ipVersion TestIPVersion) [][]network.HostPort {
-	servers := make([][]network.HostPort, n)
+func ExpectedAPIHostPorts(n int, ipVersion TestIPVersion) []network.SpaceHostPorts {
+	servers := make([]network.SpaceHostPorts, n)
 	for i := range servers {
-		servers[i] = network.NewHostPorts(
+		servers[i] = network.NewSpaceHostPorts(
 			apiPort,
 			fmt.Sprintf(ipVersion.formatHost, i+10),
 		)
@@ -185,7 +185,7 @@ func (s *workerSuite) doTestSetAndUpdateMembers(c *gc.C, ipVersion TestIPVersion
 
 	c.Logf("\nadding another controller")
 	m13 := st.addController("13", false)
-	m13.setAddresses(network.NewAddress(fmt.Sprintf(ipVersion.formatHost, 13)))
+	m13.setAddresses(network.NewSpaceAddress(fmt.Sprintf(ipVersion.formatHost, 13)))
 	st.setControllers("10", "11", "12", "13")
 
 	mustNext(c, memberWatcher, "waiting for new member to be added")
@@ -340,7 +340,7 @@ func (s *workerSuite) TestAddressChange(c *gc.C) {
 
 		// Change an address and wait for it to be changed in the
 		// members.
-		st.controller("11").setAddresses(network.NewAddress(ipVersion.extraHost))
+		st.controller("11").setAddresses(network.NewSpaceAddress(ipVersion.extraHost))
 
 		mustNext(c, memberWatcher, "waiting for new address")
 		expectMembers := mkMembers("0v 1 2", ipVersion)
@@ -471,16 +471,16 @@ func (s *workerSuite) TestSetMembersErrorIsNotFatal(c *gc.C) {
 	})
 }
 
-type SetAPIHostPortsFunc func(apiServers [][]network.HostPort) error
+type SetAPIHostPortsFunc func(apiServers []network.SpaceHostPorts) error
 
-func (f SetAPIHostPortsFunc) SetAPIHostPorts(apiServers [][]network.HostPort) error {
+func (f SetAPIHostPortsFunc) SetAPIHostPorts(apiServers []network.SpaceHostPorts) error {
 	return f(apiServers)
 }
 
 func (s *workerSuite) TestControllersArePublished(c *gc.C) {
 	DoTestForIPv4AndIPv6(c, s, func(ipVersion TestIPVersion) {
-		publishCh := make(chan [][]network.HostPort)
-		publish := func(apiServers [][]network.HostPort) error {
+		publishCh := make(chan []network.SpaceHostPorts)
+		publish := func(apiServers []network.SpaceHostPorts) error {
 			publishCh <- apiServers
 			return nil
 		}
@@ -506,12 +506,12 @@ func (s *workerSuite) TestControllersArePublished(c *gc.C) {
 
 		// Change one of the server API addresses and check that it is
 		// published.
-		newMachine10Addresses := network.NewAddresses(ipVersion.extraHost)
+		newMachine10Addresses := network.NewSpaceAddresses(ipVersion.extraHost)
 		st.controller("10").setAddresses(newMachine10Addresses...)
 		select {
 		case servers := <-publishCh:
 			expected := ExpectedAPIHostPorts(3, ipVersion)
-			expected[0] = network.AddressesWithPort(newMachine10Addresses, apiPort)
+			expected[0] = network.SpaceAddressesWithPort(newMachine10Addresses, apiPort)
 			AssertAPIHostPorts(c, servers, expected)
 		case <-time.After(coretesting.LongWait):
 			c.Fatalf("timed out waiting for publish")
@@ -603,7 +603,7 @@ func (s *workerSuite) TestControllersArePublishedOverHubWithNewVoters(c *gc.C) {
 		m := st.addController(id, true)
 		err := m.SetHasVote(true)
 		c.Assert(err, jc.ErrorIsNil)
-		m.setAddresses(network.NewAddress(fmt.Sprintf(testIPv4.formatHost, i)))
+		m.setAddresses(network.NewSpaceAddress(fmt.Sprintf(testIPv4.formatHost, i)))
 		ids = append(ids, id)
 		c.Assert(m.Addresses(), gc.HasLen, 1)
 	}
@@ -659,7 +659,7 @@ func haSpaceTestCommonSetup(c *gc.C, ipVersion TestIPVersion, members string) *f
 	st := NewFakeState()
 	InitState(c, st, 3, ipVersion)
 
-	addrs := network.NewAddresses(
+	addrs := network.NewSpaceAddresses(
 		fmt.Sprintf(ipVersion.formatHost, 1),
 		fmt.Sprintf(ipVersion.formatHost, 2),
 		fmt.Sprintf(ipVersion.formatHost, 3),
@@ -683,10 +683,10 @@ func haSpaceTestCommonSetup(c *gc.C, ipVersion TestIPVersion, members string) *f
 		// Space "one" address on controller 20 ends with "20"
 		// Space "two" address ends with "21"
 		// ...
-		addrs := make([]network.Address, 3)
+		addrs := make([]network.SpaceAddress, 3)
 		for i, name := range spaces {
-			addr := network.NewAddressOnSpace(name, fmt.Sprintf(ipVersion.formatHost, i*10+id))
-			addr.Scope = network.ScopeCloudLocal
+			addr := network.NewScopedSpaceAddress(fmt.Sprintf(ipVersion.formatHost, i*10+id), network.ScopeCloudLocal)
+			addr.SpaceID = name
 			addrs[i] = addr
 		}
 		controller.setAddresses(addrs...)
@@ -898,9 +898,9 @@ func (s *workerSuite) TestWorkerRetriesOnSetAPIHostPortsErrorIPv6(c *gc.C) {
 func (s *workerSuite) doTestWorkerRetriesOnSetAPIHostPortsError(c *gc.C, ipVersion TestIPVersion) {
 	logger.SetLogLevel(loggo.TRACE)
 
-	publishCh := make(chan [][]network.HostPort, 10)
+	publishCh := make(chan []network.SpaceHostPorts, 10)
 	failedOnce := false
-	publish := func(apiServers [][]network.HostPort) error {
+	publish := func(apiServers []network.SpaceHostPorts) error {
 		if !failedOnce {
 			failedOnce = true
 			return fmt.Errorf("publish error")
@@ -915,7 +915,7 @@ func (s *workerSuite) doTestWorkerRetriesOnSetAPIHostPortsError(c *gc.C, ipVersi
 	defer workertest.CleanKill(c, w)
 
 	retryInterval := initialRetryInterval
-	s.clock.WaitAdvance(retryInterval, coretesting.ShortWait, 1)
+	_ = s.clock.WaitAdvance(retryInterval, coretesting.ShortWait, 1)
 	select {
 	case servers := <-publishCh:
 		AssertAPIHostPorts(c, servers, ExpectedAPIHostPorts(3, ipVersion))
@@ -952,7 +952,7 @@ func (s *workerSuite) initialize3Voters(c *gc.C) (*fakeState, worker.Worker, *vo
 	for i := 11; i < 13; i++ {
 		id := fmt.Sprint(i)
 		m := st.addController(id, true)
-		m.setAddresses(network.NewAddress(fmt.Sprintf(testIPv4.formatHost, i)))
+		m.setAddresses(network.NewSpaceAddress(fmt.Sprintf(testIPv4.formatHost, i)))
 		c.Check(m.Addresses(), gc.HasLen, 1)
 	}
 	// Now that we've added 2 more, flag them as started and mark them as participating
@@ -1119,7 +1119,7 @@ func mustNextStatus(c *gc.C, w *voyeur.Watcher, context string) *replicaset.Stat
 
 type nopAPIHostPortsSetter struct{}
 
-func (nopAPIHostPortsSetter) SetAPIHostPorts(apiServers [][]network.HostPort) error {
+func (nopAPIHostPortsSetter) SetAPIHostPorts(apiServers []network.SpaceHostPorts) error {
 	return nil
 }
 
