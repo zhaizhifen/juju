@@ -396,7 +396,7 @@ func (u *mockUnit) updateAddress(value string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	u.publicAddress = corenetwork.SpaceAddress{Value: value}
+	u.publicAddress = corenetwork.NewSpaceAddress(value)
 }
 
 type mockMachine struct {
