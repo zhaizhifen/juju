@@ -596,12 +596,6 @@ func (r APIHostPortsResult) MachineHostsPorts() []network.MachineHostPorts {
 	return ToMachineHostsPorts(r.Servers)
 }
 
-// NetworkHostsPorts is a convenience helper to return the contained
-// result servers as network type.
-//func (r APIHostPortsResult) NetworkHostsPorts() [][]network.HostPort {
-//	return NetworkHostsPorts(r.Servers)
-//}
-
 // ZoneResult holds the result of an API call that returns an
 // availability zone name and whether it's available for use.
 type ZoneResult struct {
