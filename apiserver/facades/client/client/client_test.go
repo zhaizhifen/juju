@@ -1627,7 +1627,6 @@ func (s *clientSuite) TestAPIHostPorts(c *gc.C) {
 	server1Addresses := []network.SpaceAddress{
 		network.NewScopedSpaceAddress("server-1", network.ScopePublic),
 		network.NewScopedSpaceAddress("10.0.0.1", network.ScopeCloudLocal),
-		network.NewScopedSpaceAddress("::1", network.ScopeMachineLocal),
 	}
 	server1Addresses[1].SpaceID = s.mgmtSpace.Id()
 
@@ -1649,7 +1648,18 @@ func (s *clientSuite) TestAPIHostPorts(c *gc.C) {
 
 	apiHostPorts, err := s.APIState.Client().APIHostPorts()
 	c.Assert(err, jc.ErrorIsNil)
-	c.Assert(apiHostPorts, gc.DeepEquals, stateAPIHostPorts)
+
+	// We need to compare SpaceHostPorts with MachineHostPorts.
+	// They should be congruent.
+	c.Assert(len(apiHostPorts), gc.Equals, len(stateAPIHostPorts))
+	for i, apiHPs := range apiHostPorts {
+		c.Assert(len(apiHPs), gc.Equals, len(stateAPIHostPorts[i]))
+		for j, apiHP := range apiHPs {
+			c.Assert(apiHP.MachineAddress, gc.DeepEquals, stateAPIHostPorts[i][j].MachineAddress)
+			c.Assert(apiHP.NetPort, gc.Equals, stateAPIHostPorts[i][j].NetPort)
+		}
+	}
+
 }
 
 func (s *clientSuite) TestClientAgentVersion(c *gc.C) {
