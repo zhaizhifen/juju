@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/juju/juju/core/network"
+
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
 	gitjujutesting "github.com/juju/testing"
@@ -1675,7 +1677,14 @@ func (s *modelManagerStateSuite) TestModelInfoForMigratedModel(c *gc.C) {
 	var info params.RedirectErrorInfo
 	c.Assert(pErr.UnmarshalInfo(&info), jc.ErrorIsNil)
 
-	nhp := params.HostPort{Address: params.Address{Value: "1.2.3.4"}, Port: 55555}
+	nhp := params.HostPort{
+		Address: params.Address{
+			Value: "1.2.3.4",
+			Type:  string(network.IPv4Address),
+			Scope: string(network.ScopePublic),
+		},
+		Port: 5555,
+	}
 	c.Assert(info.Servers, jc.DeepEquals, [][]params.HostPort{{nhp}})
 	c.Assert(info.CACert, gc.Equals, coretesting.CACert)
 	c.Assert(info.ControllerAlias, gc.Equals, "target")
