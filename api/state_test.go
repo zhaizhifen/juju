@@ -286,6 +286,7 @@ func (s *stateSuite) TestAPIHostPortsMovesConnectedValueFirst(c *gc.C) {
 	c.Assert(err, jc.ErrorIsNil)
 
 	apiState, err := api.Open(info, api.DialOpts{})
+	c.Assert(err, jc.ErrorIsNil)
 	defer func() { _ = apiState.Close() }()
 
 	hostPorts := apiState.APIHostPorts()
