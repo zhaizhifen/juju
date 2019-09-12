@@ -514,8 +514,7 @@ func (w *pgWorker) publishAPIServerDetails(
 			ID:              id,
 			InternalAddress: internalAddress,
 		}
-		//for _, hp := range network.FilterUnusableHostPorts(hostPorts.DialAddresses()) {
-		for _, hp := range hostPorts.HostPorts() {
+		for _, hp := range hostPorts.HostPorts().FilterUnusable() {
 			server.Addresses = append(server.Addresses, network.DialAddress(hp))
 		}
 		sort.Strings(server.Addresses)
