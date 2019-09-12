@@ -1262,7 +1262,7 @@ func (s *state) APIHostPorts() []network.MachineHostPorts {
 	// for safety.
 	hostPorts := make([]network.MachineHostPorts, len(s.hostPorts))
 	for i, servers := range s.hostPorts {
-		hostPorts[i] = append([]network.MachineHostPort{}, servers...)
+		hostPorts[i] = append(network.MachineHostPorts{}, servers...)
 	}
 	return hostPorts
 }
