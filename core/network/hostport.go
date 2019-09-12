@@ -128,7 +128,7 @@ func (hp MachineHostPorts) HostPorts() HostPorts {
 // NewMachineHostPorts creates a list of MachineHostPorts
 // from each given string address and port.
 func NewMachineHostPorts(port int, addresses ...string) MachineHostPorts {
-	hps := make([]MachineHostPort, len(addresses))
+	hps := make(MachineHostPorts, len(addresses))
 	for i, addr := range addresses {
 		hps[i] = MachineHostPort{
 			MachineAddress: NewMachineAddress(addr),
@@ -263,7 +263,7 @@ type SpaceHostPorts []SpaceHostPort
 // NewSpaceHostPorts creates a list of SpaceHostPorts
 // from each input string address and port.
 func NewSpaceHostPorts(port int, addresses ...string) SpaceHostPorts {
-	hps := make([]SpaceHostPort, len(addresses))
+	hps := make(SpaceHostPorts, len(addresses))
 	for i, addr := range addresses {
 		hps[i] = SpaceHostPort{
 			SpaceAddress: NewSpaceAddress(addr),
@@ -354,7 +354,7 @@ func (hps SpaceHostPorts) ToProviderHostPorts(lookup SpaceLookup) (ProviderHostP
 // SpaceAddressesWithPort returns the input SpaceAddresses
 // all associated with the given port.
 func SpaceAddressesWithPort(addrs []SpaceAddress, port int) SpaceHostPorts {
-	hps := make([]SpaceHostPort, len(addrs))
+	hps := make(SpaceHostPorts, len(addrs))
 	for i, addr := range addrs {
 		hps[i] = SpaceHostPort{
 			SpaceAddress: addr,
