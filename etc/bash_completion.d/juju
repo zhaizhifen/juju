@@ -13,6 +13,7 @@
 #
 
 # use complete instead of compopt for zsh
+
 if [ -n "$BASH_VERSION" ]; then
   COMP_OPT_CMD=compopt
 elif [ -n "$ZSH_VERSION" ]; then
@@ -256,9 +257,7 @@ print ("\n".join(
 }
 # List all controllers
 _JUJU_2_list_controllers_noflags() {
-    _JUJU_2_cache_cmd ${_JUJU_2_cache_TTL} cat \
-      ${_juju_cmd_JUJU_2?} list-controllers --format json | \
-        _JUJU_2_list_controllers_from_stdin
+      ${_juju_cmd_JUJU_2?} list-controllers --format json | _JUJU_2_list_controllers_from_stdin
 }
 # Print:
 # - list of controllers as: <controller>:<current_model>
@@ -270,20 +269,14 @@ _JUJU_2_list_controllers_models_noflags() {
 
     # List all controller:models
     local controllers=$(_JUJU_2_list_controllers_noflags 2>/dev/null)
-    [ -n "${controllers}" ] || { echo "ERROR: no valid controller found (current: ${cur_controller})" >&2; return 0 ;}
+    [ -n "${controllers}" ] || { echo "boo" ;return 0 ;}
     local controller=
     for controller in ${controllers};do
-      _JUJU_2_cache_cmd ${_JUJU_2_cache_TTL} cat \
-        ${_juju_cmd_JUJU_2?} list-models --controller ${controller} --format json |\
-          _JUJU_2_list_models_from_stdin "${controller}:"
+      ${_juju_cmd_JUJU_2?} list-models --controller ${controller} --format json | _JUJU_2_list_models_from_stdin "${controller}:"
       # early break, specially if user hit Ctrl-C
       [ $? -eq 0 ] || return 1
     done
-
-    # List all models under current controller
-    _JUJU_2_cache_cmd ${_JUJU_2_cache_TTL} cat \
-      ${_juju_cmd_JUJU_2?} list-models --controller ${cur_controller} --format json |\
-        _JUJU_2_list_models_from_stdin
+    ${_juju_cmd_JUJU_2?} list-models --controller ${cur_controller} --format json | _JUJU_2_list_models_from_stdin
 }
 
 # Print (return) guessed completion function for cmd.
@@ -489,7 +482,6 @@ done
 
 # Add juju-2 completion
 complete -F _juju_complete_2 juju-2
-
 # Also hook "juju" (without version) to make this file "self" sufficient.
 #
 # Note that in a normal install will be overridden later by
